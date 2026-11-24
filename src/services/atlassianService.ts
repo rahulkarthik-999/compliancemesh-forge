@@ -144,17 +144,32 @@ export async function fetchProjectIssues(
   return (data.issues ?? []).map((raw) => normalizeJiraIssue(raw));
 }
 
-export async function getCurrentUserDisplayName(): Promise<string> {
+export async function getCurrentUserProfile(): Promise<{
+  accountId?: string;
+  displayName: string;
+}> {
   try {
     const res = await api.asUser().requestJira(route`/rest/api/3/myself`);
     if (res.ok) {
-      const me = (await res.json()) as { displayName?: string; emailAddress?: string };
-      return me.displayName || me.emailAddress || 'Atlassian User';
+      const me = (await res.json()) as {
+        accountId?: string;
+        displayName?: string;
+        emailAddress?: string;
+      };
+      return {
+        accountId: me.accountId,
+        displayName: me.displayName || me.emailAddress || 'Atlassian User',
+      };
     }
   } catch {
     // fallback
   }
-  return 'Atlassian User';
+  return { displayName: 'Atlassian User' };
+}
+
+export async function getCurrentUserDisplayName(): Promise<string> {
+  const profile = await getCurrentUserProfile();
+  return profile.displayName;
 }
 
 export async function postComplianceCommentOnIssue(
@@ -225,6 +240,7 @@ export async function createJiraIssue(input: {
   summary: string;
   description: string;
   labels?: string[];
+  assigneeAccountId?: string;
 }): Promise<{ id: string; key: string }> {
   // Discover a valid issue type (Task / Story / first available non-subtask) for this project
   let issueTypeName = 'Task';
@@ -259,6 +275,9 @@ export async function createJiraIssue(input: {
         issuetype: { name: issueTypeName },
         summary: input.summary,
         labels: input.labels ?? [],
+        ...(input.assigneeAccountId
+          ? { assignee: { accountId: input.assigneeAccountId } }
+          : {}),
         description: {
           type: 'doc',
           version: 1,

@@ -10,6 +10,7 @@ import {
   fetchJiraIssue,
   fetchProjectIssues,
   getCurrentUserDisplayName,
+  getCurrentUserProfile,
   postComplianceCommentOnIssue,
   publishAuditPacketToConfluence,
 } from '../services/atlassianService';
@@ -233,7 +234,8 @@ resolver.define('seedDemoScenario', async ({ context, payload }) => {
   }
 
   const createdKeys: string[] = [];
-  const recordedBy = await getCurrentUserDisplayName();
+  const profile = await getCurrentUserProfile();
+  const recordedBy = profile.displayName;
 
   const issue1 = await createJiraIssue({
     projectKey,
@@ -241,6 +243,7 @@ resolver.define('seedDemoScenario', async ({ context, payload }) => {
     description:
       'Deploying live Stripe settlement webhook and updated OAuth RBAC roles to production tonight. Debug trace referenced synthetic patient MRN-882910 — needs immediate redaction and security sign-off.',
     labels: ['fintech', 'payments', 'prod'],
+    assigneeAccountId: profile.accountId,
   });
   createdKeys.push(issue1.key);
 
@@ -250,6 +253,7 @@ resolver.define('seedDemoScenario', async ({ context, payload }) => {
     description:
       'Add bulk medical record CSV export for clinical portal with HIPAA §164.312(b) audit logging and third-party BAA verification.',
     labels: ['hipaa', 'healthtech'],
+    assigneeAccountId: profile.accountId,
   });
   createdKeys.push(issue2.key);
 
@@ -259,6 +263,7 @@ resolver.define('seedDemoScenario', async ({ context, payload }) => {
     description:
       'Upgrading ingress TLS 1.3 cipher suite with feature flag rollback plan. PR #412 peer review approved (LGTM) and integration test suite CI green. Governed by Confluence SOP runbook.',
     labels: ['soc2', 'security'],
+    assigneeAccountId: profile.accountId,
   });
   createdKeys.push(issue3.key);
 

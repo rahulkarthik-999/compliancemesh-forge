@@ -6,14 +6,19 @@ import {
 } from '../types/compliance';
 
 const TWG_USER_WORK_QUERY = `
-  query ComplianceMeshUserGraph($first: Int) {
-    atlassianUserAssignedJiraWorkItems(first: $first) {
+  query ComplianceMeshUserGraph($userId: ID!, $first: Int) {
+    atlassianUserAssignedJiraWorkItems(userId: $userId, first: $first) {
       edges {
         node {
           id
-          key
-          summary
-          status
+          ... on JiraWorkItem {
+            key
+            summary
+            status {
+              name
+            }
+            webUrl
+          }
         }
       }
     }
@@ -25,7 +30,8 @@ interface TwgEdgeNode {
     id?: string;
     key?: string;
     summary?: string;
-    status?: string;
+    status?: string | { name?: string };
+    webUrl?: string;
   };
 }
 
@@ -91,41 +97,66 @@ export async function queryComplianceTeamworkGraph(options: {
     };
 
     if (typeof asUserClient.requestTeamworkGraph === 'function') {
-      const response = await asUserClient.requestTeamworkGraph(TWG_USER_WORK_QUERY, {
-        first: options.maxItems ?? 12,
-      });
-      const json = await response.json();
-      const twgEdges = json?.data?.atlassianUserAssignedJiraWorkItems?.edges ?? [];
+      let userAccountId: string | undefined;
+      let userDisplayName = 'Active Control Owner (TWG)';
+      try {
+        const meRes = await api.asUser().requestJira(route`/rest/api/3/myself`);
+        if (meRes.ok) {
+          const me = (await meRes.json()) as { accountId?: string; displayName?: string };
+          userAccountId = me.accountId;
+          if (me.displayName) userDisplayName = me.displayName;
+        }
+      } catch {
+        // Non-fatal; proceed to fallback if accountId cannot be resolved
+      }
 
-      if (!json?.errors || twgEdges.length > 0) {
-        source = 'TEAMWORK_GRAPH_LIVE';
-        assignedWorkItemsCount = twgEdges.length;
-
-        pushNode({
-          id: 'twg:current-user',
-          type: 'USER',
-          label: 'Active Control Owner (TWG)',
-          subtitle: 'Verified via Teamwork Graph',
+      if (userAccountId) {
+        const userAri = `ari:cloud:identity::user/${userAccountId}`;
+        const response = await asUserClient.requestTeamworkGraph(TWG_USER_WORK_QUERY, {
+          userId: userAri,
+          first: options.maxItems ?? 12,
         });
+        const json = await response.json();
+        const twgEdges = json?.data?.atlassianUserAssignedJiraWorkItems?.edges ?? [];
 
-        for (const edge of twgEdges) {
-          const item = edge.node;
-          if (!item?.key) continue;
-          const issueNodeId = `issue:${item.key}`;
+        if (!json?.errors || twgEdges.length > 0) {
+          source = 'TEAMWORK_GRAPH_LIVE';
+          assignedWorkItemsCount = twgEdges.length;
+
           pushNode({
-            id: issueNodeId,
-            type: 'ISSUE',
-            label: item.key,
-            subtitle: `${item.summary ?? 'Jira Issue'} [${item.status ?? 'Open'}]`,
+            id: userAri,
+            type: 'USER',
+            label: userDisplayName,
+            subtitle: 'Verified via Atlassian Teamwork Graph',
           });
-          edges.push({
-            from: 'twg:current-user',
-            to: issueNodeId,
-            relation: 'ASSIGNED_WORK_ITEM',
-          });
+
+          for (const edge of twgEdges) {
+            const item = edge.node;
+            if (!item?.id) continue;
+            const statusText =
+              typeof item.status === 'string'
+                ? item.status
+                : item.status?.name ?? 'Open';
+            const issueLabel = item.key ?? item.id.split('/').pop() ?? 'Work Item';
+            const issueNodeId = `issue:${issueLabel}`;
+            pushNode({
+              id: issueNodeId,
+              type: 'ISSUE',
+              label: issueLabel,
+              subtitle: `${item.summary ?? 'Jira Work Item'} [${statusText}]`,
+              url: item.webUrl,
+            });
+            edges.push({
+              from: userAri,
+              to: issueNodeId,
+              relation: 'ASSIGNED_WORK_ITEM',
+            });
+          }
+        } else {
+          note = `TWG returned schema/scope notice: ${json.errors[0]?.message ?? 'check TWG scopes'}`;
         }
       } else {
-        note = `TWG returned schema/scope notice: ${json.errors[0]?.message ?? 'check TWG scopes'}`;
+        note = 'TWG skipped: unable to resolve current Atlassian user accountId.';
       }
     }
   } catch (err) {
