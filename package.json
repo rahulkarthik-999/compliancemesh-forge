@@ -1,0 +1,25 @@
+{
+  "name": "compliancemesh-forge",
+  "version": "1.0.0",
+  "description": "ComplianceMesh — Continuous Audit & Evidence Engine for Regulated FinTech & HealthTech Teams on Atlassian Forge (Rovo Agent + Atlassian MCP + Teamwork Graph)",
+  "license": "Apache-2.0",
+  "scripts": {
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit",
+    "lint:forge": "forge lint"
+  },
+  "dependencies": {
+    "@forge/api": "^6.1.0",
+    "@forge/bridge": "^5.0.0",
+    "@forge/kvs": "^1.1.0",
+    "@forge/react": "^11.2.0",
+    "@forge/resolver": "^1.6.10",
+    "react": "^18.2.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "@types/react": "^18.2.0",
+    "typescript": "^5.8.3",
+    "vitest": "^3.1.4"
+  }
+}

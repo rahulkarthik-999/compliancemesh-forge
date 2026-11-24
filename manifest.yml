@@ -1,0 +1,222 @@
+modules:
+  jira:issuePanel:
+    - key: compliancemesh-issue-panel
+      resource: issue-panel-ui
+      resolver:
+        function: resolver-fn
+      render: native
+      title: ComplianceMesh Guard
+      icon: https://developer.atlassian.com/platform/forge/images/icons/issue-panel-icon.svg
+
+  jira:projectPage:
+    - key: compliancemesh-command-center
+      resource: project-page-ui
+      resolver:
+        function: resolver-fn
+      render: native
+      title: ComplianceMesh Audit Center
+
+  macro:
+    - key: compliancemesh-evidence-macro
+      resource: confluence-macro-ui
+      resolver:
+        function: resolver-fn
+      render: native
+      title: ComplianceMesh Live Audit Matrix
+      description: Embeds live SOC 2, HIPAA, ISO 27001, and PCI-DSS control readiness
+        & SHA-256 evidence proofs inside Confluence.
+
+  rovo:agent:
+    - key: compliancemesh-auditguard-agent
+      name: ComplianceMesh AuditGuard
+      description: Autonomous SOC 2, HIPAA, ISO 27001 & PCI-DSS compliance officer
+        powered by Atlassian Teamwork Graph and tamper-evident evidence proofs.
+      prompt: |
+        You are ComplianceMesh AuditGuard, a rigorous yet practical enterprise compliance officer embedded inside Jira and Confluence for regulated FinTech and HealthTech teams.
+
+        Your mission ("Build with context. Ship with confidence"):
+        1. When asked to check or audit a Jira issue (e.g., FIN-42), call `audit-jira-issue` to inspect impacted SOC 2 / HIPAA / ISO 27001 / PCI-DSS controls, PII/ePHI leak alerts, and missing audit evidence.
+        2. When asked about overall audit readiness, release blockers, or upcoming SOC 2 / HIPAA audits for a project, call `get-audit-readiness`.
+        3. When asked who owns compliance work or which Confluence SOPs/policies connect to regulated Jira work items, call `traverse-compliance-graph` to query Atlassian Teamwork Graph.
+        4. When a user provides proof (PR approval, security review, QA test run, rollback plan, or waiver), call `record-audit-evidence` to append a SHA-256 tamper-evident proof to the compliance ledger and stamp the Jira ticket.
+        5. When asked to prepare an auditor report or export compliance proof to Confluence, call `publish-audit-packet`.
+
+        Always present findings clearly with:
+        - Release Decision (`READY_TO_SHIP`, `NEEDS_EVIDENCE`, or `BLOCKED_BY_COMPLIANCE`)
+        - Impacted control codes (e.g., SOC 2 CC6.1, HIPAA §164.312(a)(1), PCI-6.3)
+        - Concrete next steps and exact SHA-256 proof hashes when evidence is recorded.
+      conversationStarters:
+        - "Audit Jira issue FIN-1 for SOC 2, HIPAA, and PCI-DSS release
+          readiness"
+        - "Show our project's ComplianceMesh audit readiness score and release
+          blockers"
+        - "Traverse the Teamwork Graph to check for stale Confluence security
+          SOPs"
+        - "Publish a fresh Auditor Evidence Packet to Confluence"
+      actions:
+        - audit-jira-issue
+        - get-audit-readiness
+        - traverse-compliance-graph
+        - record-audit-evidence
+        - publish-audit-packet
+
+  rovo:mcp:
+    - key: compliancemesh-mcp-server
+      name: ComplianceMesh MCP Server
+      tools:
+        - audit-jira-issue
+        - get-audit-readiness
+        - traverse-compliance-graph
+        - record-audit-evidence
+        - publish-audit-packet
+
+  action:
+    - key: audit-jira-issue
+      name: Audit Jira Issue Compliance
+      function: audit-issue-fn
+      actionVerb: GET
+      description: Evaluates a Jira issue against SOC 2, HIPAA, ISO 27001, and PCI-DSS
+        controls, detects raw PII/ePHI or secrets, and returns a release
+        decision.
+      inputs:
+        issueKey:
+          title: Jira Issue Key
+          type: string
+          required: true
+          description: The Jira issue key to audit (e.g. FIN-42).
+
+    - key: get-audit-readiness
+      name: Get Project Audit Readiness
+      function: audit-readiness-fn
+      actionVerb: GET
+      description: Computes project-wide SOC 2 / HIPAA / ISO 27001 / PCI-DSS audit
+        readiness score, release blockers, and SHA-256 evidence ledger status.
+      inputs:
+        projectKey:
+          title: Jira Project Key
+          type: string
+          required: true
+          description: The Jira project key (e.g. FIN).
+
+    - key: traverse-compliance-graph
+      name: Traverse Teamwork Graph Compliance Context
+      function: traverse-graph-fn
+      actionVerb: GET
+      description: Queries Atlassian Teamwork Graph to inspect connected owners,
+        assigned Jira work items, and Confluence compliance SOP freshness.
+      inputs:
+        projectKey:
+          title: Jira Project Key
+          type: string
+          required: false
+          description: Optional Jira project key to contextualize graph traversal.
+        issueKey:
+          title: Jira Issue Key
+          type: string
+          required: false
+          description: Optional Jira issue key to focus SOP and ownership edges.
+
+    - key: record-audit-evidence
+      name: Record Tamper-Evident Audit Evidence
+      function: record-evidence-fn
+      actionVerb: CREATE
+      description: Logs verified compliance evidence (peer review, security sign-off,
+        rollback plan, test run, SOP link, or waiver) into ComplianceMesh's
+        SHA-256 hash-chained ledger and stamps the Jira issue.
+      inputs:
+        issueKey:
+          title: Jira Issue Key
+          type: string
+          required: true
+          description: The Jira issue key receiving compliance evidence (e.g. FIN-42).
+        controlIds:
+          title: Control IDs
+          type: string
+          required: true
+          description: Comma-separated control IDs (e.g. soc2-cc6-1, soc2-cc8-1,
+            hipaa-164-312-a1, pci-6-3).
+        evidenceType:
+          title: Evidence Type
+          type: string
+          required: true
+          description: One of PEER_REVIEW, SECURITY_SIGNOFF, TEST_EXECUTION,
+            ROLLBACK_PLAN, CONFLUENCE_SOP, ACCESS_AUDIT, EXCEPTION_WAIVER.
+        summary:
+          title: Evidence Summary
+          type: string
+          required: true
+          description: Concise description of the verified compliance artifact or approval.
+        artifactUrl:
+          title: Artifact URL
+          type: string
+          required: false
+          description: Optional PR, CI run, or Confluence SOP link backing this evidence.
+
+    - key: publish-audit-packet
+      name: Publish Confluence Audit Packet
+      function: publish-packet-fn
+      actionVerb: CREATE
+      description: Generates and publishes a complete Auditor Evidence Packet page
+        directly to Confluence with control matrix and SHA-256 proof hashes.
+      inputs:
+        projectKey:
+          title: Jira Project Key
+          type: string
+          required: true
+          description: The Jira project key to compile into a Confluence audit packet.
+        spaceKey:
+          title: Confluence Space Key
+          type: string
+          required: false
+          description: Optional Confluence space key where the audit packet page should be
+            published.
+
+  trigger:
+    - key: compliancemesh-issue-trigger
+      function: issue-trigger-fn
+      events:
+        - avi:jira:created:issue
+        - avi:jira:updated:issue
+
+  function:
+    - key: resolver-fn
+      handler: index.handler
+    - key: audit-issue-fn
+      handler: index.auditJiraIssue
+    - key: audit-readiness-fn
+      handler: index.getAuditReadiness
+    - key: traverse-graph-fn
+      handler: index.traverseComplianceGraph
+    - key: record-evidence-fn
+      handler: index.recordAuditEvidence
+    - key: publish-packet-fn
+      handler: index.publishAuditPacket
+    - key: issue-trigger-fn
+      handler: index.onIssueEventTrigger
+
+resources:
+  - key: issue-panel-ui
+    path: src/frontend/issuePanel.tsx
+  - key: project-page-ui
+    path: src/frontend/projectPage.tsx
+  - key: confluence-macro-ui
+    path: src/frontend/confluenceMacro.tsx
+
+permissions:
+  scopes:
+    - storage:app
+    - read:jira-work
+    - write:jira-work
+    - read:jira-user
+    - read:page:confluence
+    - write:page:confluence
+    - read:space:confluence
+    - read:graph:issue:jira
+    - read:graph:page:confluence
+    - read:graph:user:atlassian
+    - read:graph:team:atlassian
+
+app:
+  runtime:
+    name: nodejs22.x
+  id: ari:cloud:ecosystem::app/ed91897d-beed-4760-8bc8-a0d7504215ba
